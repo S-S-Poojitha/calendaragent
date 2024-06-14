@@ -26,7 +26,7 @@ ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
 def authenti():
     creds = None
-
+    TOKEN_PATH = os.path.join(SERVICE_ACCOUNTS_DIR, f'{user_email}_token.json')
     if os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
