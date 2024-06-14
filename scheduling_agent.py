@@ -24,6 +24,47 @@ slot_durations_file = 'slot_durations.json'
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
+def authenti():
+    """
+    Perform OAuth 2.0 authentication with Google and capture user email.
+    """
+    creds = None
+
+    # Check if token file exists
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
+    # If there are no (valid) credentials available, let user authenticate
+    if not creds or not creds.valid:
+        flow = Flow.from_client_secrets_file(
+            'credentials.json',
+            scopes=SCOPES,
+            redirect_uri='http://localhost:8501/'  # Adjust as per your setup
+        )
+
+        authorization_url, _ = flow.authorization_url(prompt='consent')
+
+        st.write(f"Please [authenticate with Google]({authorization_url}) to continue.")
+        code = st.text_input('Enter the authorization code:')
+
+        if code:
+            flow.fetch_token(code=code)
+            creds = flow.credentials
+
+            # Save the credentials to token file
+            with open(TOKEN_PATH, 'w') as token:
+                token.write(creds.to_json())
+
+            # Get user's email address
+            service = build('oauth2', 'v2', credentials=creds)
+            user_info = service.userinfo().get().execute()
+            user_email = user_info['email']
+
+            # Save user email to session state or database
+            st.session_state.user_email = user_email
+
+    return creds
+
 
 def authenticate(user_email):
     creds = None
@@ -246,7 +287,7 @@ def display_slots(free_slots):
 
 
 def main():
-    user_email = st.experimental_get_query_params().get('user_email', [''])[0]
+    user_email =authenti()
     if not user_email:
         st.write("Please authenticate with Google to continue.")
         return
