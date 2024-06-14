@@ -24,7 +24,6 @@ slot_durations_file = 'slot_durations.json'
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
-user_email = st.text_input("Enter your email address:")
 
 def authenticate(user_email):
     creds = None
@@ -34,23 +33,29 @@ def authenticate(user_email):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
-            flow.redirect_uri = 'urn:ietf:wg:oauth:2.0:oob'
-            auth_url, _ = flow.authorization_url(prompt='consent')
-            st.write('Please go to this URL and authorize access:')
-            st.write(auth_url)
+        flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
+        flow.redirect_uri = st.secrets["url"]
+        authorization_url, _ = flow.authorization_url(prompt='consent')
 
-            code = st.text_input('Enter the authorization code here:')
-            if code:
+        if st.button('Authenticate with Google'):
+            try:
+                st.write('Please go to the following URL to authenticate:')
+                st.write(authorization_url)
+                st.write('After authenticating, you will be redirected back to this page.')
+
+                code = st.experimental_get_query_params()['code'][0]
                 flow.fetch_token(code=code)
                 creds = flow.credentials
                 with open(token_path, 'w') as token:
                     token.write(creds.to_json())
 
-    return creds
+                # Extract user email from the token and return
+                user_info = build('oauth2', 'v2', credentials=creds).userinfo().get().execute()
+                return creds, user_info['email']
+            except Exception as e:
+                st.error(f"Authentication failed: {e}")
+
+    return creds, None
 
 def fetch_organization_calendar_events(credentials, calendar_id, selected_date):
     try:
@@ -241,44 +246,41 @@ def display_slots(free_slots):
 
 
 def main():
-    o=[]
-    c=0
-    if user_email:
-        user_creds = authenticate(user_email)
-        k=0
-        if user_creds:
-            st.success('Authenticated successfully.')
+    user_email = st.experimental_get_query_params().get('user_email', [''])[0]
+    if not user_email:
+        st.write("Please authenticate with Google to continue.")
+        return
 
-            # Organization selects a date and defines slot duration
-            selected_date = datetime.date.today()+datetime.timedelta(days=2)# Change this to adjust the number of days to chec
-            while len(o) < 3:
-                    user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
-                    org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-                    free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
-                    if len(free_slots) > 0:
-                                for i in free_slots:
-                                        o.append(i)
-                                        if(len(o)==3):
-                                            break
-                    selected_date+=datetime.timedelta(days=1)
-            if len(o) > 0:
-                selected_slot = display_slots(o)
-                if selected_slot:
-                    message_placeholder = st.empty()
-                    org_creds = authenticate('poojithasarvamangala@gmail.com')
-                    try:
-                        start_time, end_time = selected_slot
-                        org_event = add_event_to_calendar(org_creds, ORG_CALENDAR_ID, start_time, end_time, 'Interview')
-                        if org_event:
-                            meeting_link = org_event.get('hangoutLink')
-                            st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
-                            st.write(f"Google Meet Link: {meeting_link}")
-                            send_email('Interview',start_time,end_time,meeting_link,user_email)
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-            else:
-                st.write("No free slots available for scheduling.")
-        
+    user_creds, user_email = authenticate(user_email)
+    if not user_creds:
+        return
+
+    st.success('Authenticated successfully.')
+
+    # Organization selects a date and defines slot duration
+    selected_date = datetime.date.today() + datetime.timedelta(days=2)  # Change this to adjust the number of days to check
+    user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
+    org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
+    free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
+    if len(free_slots) > 0:
+        selected_slot = display_slots(free_slots)
+        if selected_slot:
+            message_placeholder = st.empty()
+            org_creds = authenticate('poojithasarvamangala@gmail.com')
+            try:
+                start_time, end_time = selected_slot
+                org_event = add_event_to_calendar(org_creds, ORG_CALENDAR_ID, start_time, end_time, 'Interview')
+                if org_event:
+                    meeting_link = org_event.get('hangoutLink')
+                    st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
+                    st.write(f"Google Meet Link: {meeting_link}")
+                    send_email('Interview', start_time, end_time, meeting_link, user_email)
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+    else:
+        st.write("No free slots available for scheduling.")
+
+
 if __name__ == "__main__":
     if not os.path.exists(SERVICE_ACCOUNTS_DIR):
         os.makedirs(SERVICE_ACCOUNTS_DIR)
