@@ -261,6 +261,7 @@ def display_slots(free_slots):
 def main():
     o=[]
     c=0
+    user_email=authenticate_user()
     if user_email:
         user_creds = authenticate(user_email)
         k=0
