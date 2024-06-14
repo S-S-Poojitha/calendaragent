@@ -16,7 +16,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
-SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly",'https://www.googleapis.com/auth/userinfo.email']
 ORG_CALENDAR_ID = 'poojithasarvamangala@gmail.com'
 DEFAULT_SLOT_DURATION = 60  # Default slot duration in minutes
 slot_durations_file = 'slot_durations.json'
@@ -24,7 +24,25 @@ slot_durations_file = 'slot_durations.json'
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
-user_email = st.text_input("Enter your email address:")
+def authenticate_user():
+    flow = Flow.from_client_secrets_file(
+        'client_secret.json',
+        scopes=SCOPES,
+        redirect_uri='http://localhost:8501/'
+    )
+
+    authorization_url, _ = flow.authorization_url(prompt='consent')
+    st.write(f"Please [authenticate with Google]({authorization_url}) to continue.")
+
+    code = st.text_input('Enter the authorization code:')
+
+    if code:
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        service = build('oauth2', 'v2', credentials=credentials)
+        user_info = service.userinfo().get().execute()
+        return user_info.get('email')
+
 
 def authenticate(user_email):
     creds = None
