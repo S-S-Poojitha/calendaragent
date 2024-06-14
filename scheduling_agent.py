@@ -26,7 +26,7 @@ ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
 def authenticate_user():
     flow = Flow.from_client_secrets_file(
-        'client_secret.json',
+        'credentials.json',
         scopes=SCOPES,
         redirect_uri='http://localhost:8501/'
     )
