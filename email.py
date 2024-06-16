@@ -4,6 +4,7 @@ import streamlit as st
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+import git
 
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
@@ -48,13 +49,7 @@ def save_user_email(email):
 
     # Close the connection
     conn.close()
-    
-def commit_and_push_changes():
-    repo = git.Repo(search_parent_directories=True)
-    repo.git.add(update=True)
-    repo.index.commit("Deleted user email from database")
-    origin = repo.remote(name="origin")
-    origin.push()
+
 
 def main():
     user_email = st.text_input("Enter recipient's email address")
@@ -62,7 +57,7 @@ def main():
         if user_email:
             # Save user's email to SQLite database
             save_user_email(user_email)
-            commit_and_push_changes()
+            #commit_and_push_changes()
             # Send email
             event_summary = 'https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
             send_email(event_summary, user_email)
