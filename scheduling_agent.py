@@ -14,6 +14,7 @@ import smtplib
 import json
 import warnings
 import git
+import sqlite3
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
@@ -25,6 +26,10 @@ slot_durations_file = 'slot_durations.json'
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
+
+# Connect to SQLite database
+conn = sqlite3.connect('user_emails.db')
+c = conn.cursor()
 
 def authenticate(user_email):
     creds = None
@@ -212,18 +217,19 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
 
 
 def read_user_email():
-    with open('user_email.txt', 'r') as file:
-        return file.read().strip()
+    c.execute('SELECT * FROM emails')
+    user_email = c.fetchone()[0]
+    return user_email
 
-def delete_user_email_file():
-    if os.path.exists('user_email.txt'):
-        os.remove('user_email.txt')
-        st.write("Deleted user_email.txt")
+def delete_user_email_from_db():
+    c.execute('DELETE FROM emails')
+    conn.commit()
+    st.write("Deleted user email from database")
 
 def commit_and_push_changes():
     repo = git.Repo(search_parent_directories=True)
     repo.git.add(update=True)
-    repo.index.commit("Deleted user_email.txt")
+    repo.index.commit("Deleted user email from database")
     origin = repo.remote(name="origin")
     origin.push()
 
@@ -267,7 +273,7 @@ def main():
             else:
                 st.write("No free slots available for scheduling.")
     
-    delete_user_email_file()  # Delete user_email.txt
+    delete_user_email_from_db()  # Delete user email from database
     commit_and_push_changes()  # Commit and push changes
 
 if __name__ == "__main__":
