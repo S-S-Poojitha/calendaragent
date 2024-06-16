@@ -3,6 +3,7 @@ import streamlit as st
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+from git import Repo
 
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
@@ -19,7 +20,7 @@ def send_email(event_summary, recipient_email):
     message = MIMEMultipart()
     message['From'] = sender_email
     message['To'] = recipient_email
-    message['Suject']='Proposed Event'
+    message['Subject'] = 'Proposed Event'  # Corrected typo in 'Subject'
     body = event_summary
     message.attach(MIMEText(body, 'plain'))
 
@@ -34,12 +35,27 @@ def send_email(event_summary, recipient_email):
         st.error(f"Failed to send email: {e}")
 
 def main():
-    user_email= st.text_input("Enter recipient's email address")
-    with open('user_email.txt', 'w') as file:
-        file.write(user_email)
-    event_summary='https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
+    user_email = st.text_input("Enter recipient's email address")
     if st.button('Send Email'):
         if user_email:
+            # Write user email to a text file
+            with open('user_email.txt', 'w') as file:
+                file.write(user_email)
+            
+            # Initialize Git repository object
+            repo = Repo(path=os.getcwd())
+
+            # Add all changes to the index
+            repo.index.add(['user_email.txt'])
+
+            # Commit the changes
+            repo.index.commit("Added user email to file")
+
+            # Push the changes to the remote repository
+            repo.remote(name='origin').push()
+            
+            # Send email
+            event_summary = 'https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
             send_email(event_summary, user_email)
         else:
             st.error('Please enter a recipient email address.')
