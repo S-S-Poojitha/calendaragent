@@ -13,6 +13,7 @@ from email.mime.text import MIMEText
 import smtplib
 import json
 import warnings
+from email import user_emai
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
@@ -257,11 +258,14 @@ def display_slots(free_slots):
             selected_slot = (start, end)
     return selected_slot
 
+def read_user_email():
+    with open('user_email.txt', 'r') as file:
+        return file.read().strip()
 
 def main():
     o=[]
     c=0
-    user_email= os.getenv('user_email')
+    user_email = read_user_email()
     if user_email:
         user_creds = authenticate(user_email)
         k=0
@@ -297,7 +301,6 @@ def main():
                         st.error(f"An error occurred: {e}")
             else:
                 st.write("No free slots available for scheduling.")
-        
 if __name__ == "__main__":
     if not os.path.exists(SERVICE_ACCOUNTS_DIR):
         os.makedirs(SERVICE_ACCOUNTS_DIR)

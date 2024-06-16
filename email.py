@@ -34,8 +34,9 @@ def send_email(event_summary, recipient_email):
         st.error(f"Failed to send email: {e}")
 
 def main():
-    user_email = st.text_input("Enter recipient's email address")
-    os.environ['user_email']=user_email
+    user_email= st.text_input("Enter recipient's email address")
+    with open('user_email.txt', 'w') as file:
+        file.write(user_email)
     event_summary='https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
     if st.button('Send Email'):
         if user_email:
