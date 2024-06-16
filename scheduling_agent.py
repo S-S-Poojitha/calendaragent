@@ -1,9 +1,7 @@
 import os
 import datetime
 import uuid
-import sqlite3 
 import streamlit as st
-import git
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -26,8 +24,8 @@ slot_durations_file = 'slot_durations.json'
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
-conn = sqlite3.connect('user_emails.db')
-c = conn.cursor()
+user_email = st.text_input("Enter your email address:")
+
 def authenticate(user_email):
     creds = None
     token_path = os.path.join(SERVICE_ACCOUNTS_DIR, f'{user_email}_token.json')
@@ -241,40 +239,28 @@ def display_slots(free_slots):
             selected_slot = (start, end)
     return selected_slot
 
-def read_user_email():
-    c.execute('SELECT * FROM emails')
-    user_email = c.fetchone()[0]
-    return user_email
-
-def delete_user_email_from_db():
-    c.execute('DELETE FROM emails')
-    conn.commit()
-    st.write("Deleted user email from database")
-
-
 
 def main():
-    o = []
-    #c = 0
-    user_email = read_user_email()
+    o=[]
+    c=0
     if user_email:
         user_creds = authenticate(user_email)
-        k = 0
+        k=0
         if user_creds:
             st.success('Authenticated successfully.')
 
             # Organization selects a date and defines slot duration
-            selected_date = datetime.date.today() + datetime.timedelta(days=2)
+            selected_date = datetime.date.today()+datetime.timedelta(days=2)# Change this to adjust the number of days to chec
             while len(o) < 3:
-                user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
-                org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-                free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
-                if len(free_slots) > 0:
-                    for i in free_slots:
-                        o.append(i)
-                        if len(o) == 3:
-                            break
-                selected_date += datetime.timedelta(days=1)
+                    user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
+                    org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
+                    free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
+                    if len(free_slots) > 0:
+                                for i in free_slots:
+                                        o.append(i)
+                                        if(len(o)==3):
+                                            break
+                    selected_date+=datetime.timedelta(days=1)
             if len(o) > 0:
                 selected_slot = display_slots(o)
                 if selected_slot:
@@ -287,15 +273,12 @@ def main():
                             meeting_link = org_event.get('hangoutLink')
                             st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
                             st.write(f"Google Meet Link: {meeting_link}")
-                            send_email('Interview', start_time, end_time, meeting_link, user_email)
+                            send_email('Interview',start_time,end_time,meeting_link,user_email)
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
             else:
                 st.write("No free slots available for scheduling.")
-    
-    #delete_user_email_from_db()  # Delete user email from database
-    #commit_and_push_changes()  # Commit and push changes
-
+        
 if __name__ == "__main__":
     if not os.path.exists(SERVICE_ACCOUNTS_DIR):
         os.makedirs(SERVICE_ACCOUNTS_DIR)
