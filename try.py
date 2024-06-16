@@ -242,6 +242,7 @@ def initiate_google_sign_in():
         'credentials.json',  # Path to your OAuth client ID JSON file
         scopes=['openid', 'email', 'profile', 'https://www.googleapis.com/auth/calendar']
     )
+    flow.redirect_uri = 'http://localhost:8501/oauth/callback'
     auth_url, _ = flow.authorization_url(prompt='consent')
     st.write('Please go to this URL and authorize access:')
     st.write(auth_url)
