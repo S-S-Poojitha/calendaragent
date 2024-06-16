@@ -1,7 +1,9 @@
 import os
 import datetime
 import uuid
+import sqlite3 
 import streamlit as st
+import git
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -13,8 +15,6 @@ from email.mime.text import MIMEText
 import smtplib
 import json
 import warnings
-import git
-import sqlite3
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
@@ -26,11 +26,8 @@ slot_durations_file = 'slot_durations.json'
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
-
-# Connect to SQLite database
 conn = sqlite3.connect('user_emails.db')
 c = conn.cursor()
-
 def authenticate(user_email):
     creds = None
     token_path = os.path.join(SERVICE_ACCOUNTS_DIR, f'{user_email}_token.json')
@@ -216,6 +213,34 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
         st.error(f"Failed to send email: {e}")
 
 
+def save_slot_duration(date, duration):
+    if os.path.exists(slot_durations_file):
+        with open(slot_durations_file, 'r') as file:
+            slot_durations = json.load(file)
+    else:
+        slot_durations = {}
+
+    slot_durations[str(date)] = duration
+
+    with open(slot_durations_file, 'w') as file:
+        json.dump(slot_durations, file)
+
+def load_slot_duration(date):
+    if os.path.exists(slot_durations_file):
+        with open(slot_durations_file, 'r') as file:
+            slot_durations = json.load(file)
+        return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
+    return DEFAULT_SLOT_DURATION
+
+def display_slots(free_slots):
+    st.write("Available time slots:")
+    selected_slot = None
+    for i, (start, end) in enumerate(free_slots):
+        slot_str = f"{start.strftime('%Y-%m-%d %H:%M')} - {end.strftime('%Y-%m-%d %H:%M')}"
+        if st.button(slot_str, key=f'slot_{i}'):
+            selected_slot = (start, end)
+    return selected_slot
+
 def read_user_email():
     c.execute('SELECT * FROM emails')
     user_email = c.fetchone()[0]
@@ -226,16 +251,11 @@ def delete_user_email_from_db():
     conn.commit()
     st.write("Deleted user email from database")
 
-def commit_and_push_changes():
-    repo = git.Repo(search_parent_directories=True)
-    repo.git.add(update=True)
-    repo.index.commit("Deleted user email from database")
-    origin = repo.remote(name="origin")
-    origin.push()
+
 
 def main():
     o = []
-    c = 0
+    #c = 0
     user_email = read_user_email()
     if user_email:
         user_creds = authenticate(user_email)
@@ -273,8 +293,8 @@ def main():
             else:
                 st.write("No free slots available for scheduling.")
     
-    delete_user_email_from_db()  # Delete user email from database
-    commit_and_push_changes()  # Commit and push changes
+    #delete_user_email_from_db()  # Delete user email from database
+    #commit_and_push_changes()  # Commit and push changes
 
 if __name__ == "__main__":
     if not os.path.exists(SERVICE_ACCOUNTS_DIR):
