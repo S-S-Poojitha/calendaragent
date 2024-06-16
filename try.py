@@ -55,7 +55,7 @@ def authenticate(user_email):
 def initiate_google_sign_in():
     flow = Flow.from_client_secrets_file(
         'credentials.json',  # Path to your OAuth client ID JSON file
-        scopes=['openid', 'https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/calendar']
+        scopes=['openid', 'https://www.googleapis.com/auth/gmail.readonly','https://www.googleapis.com/auth/userinfo.profile' ,'https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/calendar']
     )
     flow.redirect_uri = 'urn:ietf:wg:oauth:2.0:oob'
     auth_url, _ = flow.authorization_url(prompt='consent')
