@@ -97,9 +97,11 @@ def main():
     c = 0
     credentials = initiate_google_sign_in()
     if credentials:
-        user_email = credentials.id_token['email']
-        st.write(';')
-        if credentials:
+        # Retrieve user's email address using userinfo endpoint
+        user_info = requests.get('https://openidconnect.googleapis.com/v1/userinfo', headers={'Authorization': f'Bearer {credentials.token}'})
+        user_email = user_info.json().get('email', None)
+        
+        if user_email:
             user_creds = authenticate(user_email)
             if user_creds:
                 st.success('Authenticated successfully.')
