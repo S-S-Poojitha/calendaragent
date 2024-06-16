@@ -265,6 +265,7 @@ def main():
     user_email = None
     if st.button('Continue with Google'):
         credentials = initiate_google_sign_in()
+        st.write(';')
         if credentials:
             # Use the obtained credentials for Google Calendar API authentication
             user_email = credentials.id_token['email']
