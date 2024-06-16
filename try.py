@@ -36,8 +36,11 @@ def authenticate(user_email):
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
-            flow.redirect_uri = 'urn:ietf:wg:oauth:2.0:oob'
+            # Define the redirect URI
+            redirect_uri = 'http://localhost:8501/oauth/callback'  # Adjust the port number as needed
+
+            # Initialize the OAuth flow with the redirect URI
+            flow = Flow.from_client_secrets_file('credentials.json', SCOPES, redirect_uri=redirect_uri)
             auth_url, _ = flow.authorization_url(prompt='consent')
             st.write('Please go to this URL and authorize access:')
             st.write(auth_url)
@@ -50,7 +53,6 @@ def authenticate(user_email):
                     token.write(creds.to_json())
 
     return creds
-
 def fetch_organization_calendar_events(credentials, calendar_id, selected_date):
     try:
         service = build('calendar', 'v3', credentials=credentials)
