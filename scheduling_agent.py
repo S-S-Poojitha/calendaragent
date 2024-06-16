@@ -261,7 +261,7 @@ def display_slots(free_slots):
 def main():
     o=[]
     c=0
-    user_email=os.gentenv['user_email']
+    user_email= os.getenv('user_email')
     if user_email:
         user_creds = authenticate(user_email)
         k=0
