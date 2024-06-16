@@ -1,10 +1,7 @@
-import os
-import sqlite3
 import streamlit as st
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
-import git
 
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
@@ -21,7 +18,7 @@ def send_email(event_summary, recipient_email):
     message = MIMEMultipart()
     message['From'] = sender_email
     message['To'] = recipient_email
-    message['Subject'] = 'Proposed Event'  # Corrected typo in 'Subject'
+    message['Suject']='Proposed Event'
     body = event_summary
     message.attach(MIMEText(body, 'plain'))
 
@@ -35,31 +32,11 @@ def send_email(event_summary, recipient_email):
     except Exception as e:
         st.error(f"Failed to send email: {e}")
 
-def save_user_email(email):
-    # Connect to SQLite database or create it if it doesn't exist
-    conn = sqlite3.connect('user_emails.db')
-    c = conn.cursor()
-
-    # Create table if it doesn't exist
-    c.execute('''CREATE TABLE IF NOT EXISTS emails (email TEXT)''')
-
-    # Insert user's email into the table
-    c.execute("INSERT INTO emails (email) VALUES (?)", (email,))
-    conn.commit()
-
-    # Close the connection
-    conn.close()
-
-
 def main():
     user_email = st.text_input("Enter recipient's email address")
+    event_summary='https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
     if st.button('Send Email'):
         if user_email:
-            # Save user's email to SQLite database
-            save_user_email(user_email)
-            #commit_and_push_changes()
-            # Send email
-            event_summary = 'https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
             send_email(event_summary, user_email)
         else:
             st.error('Please enter a recipient email address.')
