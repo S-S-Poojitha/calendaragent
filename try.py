@@ -13,6 +13,8 @@ from email.mime.text import MIMEText
 import smtplib
 import json
 import warnings
+import google.auth.transport.requests
+import requests
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
@@ -93,12 +95,9 @@ def fetch_organization_calendar_events(credentials, calendar_id, selected_date):
 def main():
     o = []
     c = 0
-    credentials = flow.credentials
-    request = google.auth.transport.requests.Request()
-    id_info = requests.get('https://openidconnect.googleapis.com/v1/userinfo', headers={'Authorization': f'Bearer {credentials.token}'})
-    user_info = id_info.json()
-    user_email = user_info.get('email')
-    if(1):
+    credentials = initiate_google_sign_in()
+    if credentials:
+        user_email = credentials.id_token['email']
         st.write(';')
         if credentials:
             user_creds = authenticate(user_email)
