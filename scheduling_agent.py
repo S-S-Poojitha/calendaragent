@@ -13,11 +13,11 @@ from email.mime.text import MIMEText
 import smtplib
 import json
 import warnings
-from email import user_emai
+import git
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
-SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly",'https://www.googleapis.com/auth/userinfo.email']
+SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
 ORG_CALENDAR_ID = 'poojithasarvamangala@gmail.com'
 DEFAULT_SLOT_DURATION = 60  # Default slot duration in minutes
 slot_durations_file = 'slot_durations.json'
@@ -25,25 +25,6 @@ slot_durations_file = 'slot_durations.json'
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 st.title('Google Calendar Events Viewer & Scheduler')
-def authenticate_user():
-    flow = Flow.from_client_secrets_file(
-        'credentials.json',
-        scopes=SCOPES,
-        redirect_uri='http://localhost:8501'
-    )
-
-    authorization_url, _ = flow.authorization_url(prompt='consent')
-    st.write(f"Please [authenticate with Google]({authorization_url}) to continue.")
-
-    code = st.text_input('Enter the authorization code:')
-
-    if code:
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
-        service = build('oauth2', 'v2', credentials=credentials)
-        user_info = service.userinfo().get().execute()
-        return user_info.get('email')
-
 
 def authenticate(user_email):
     creds = None
@@ -230,60 +211,44 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
         st.error(f"Failed to send email: {e}")
 
 
-def save_slot_duration(date, duration):
-    if os.path.exists(slot_durations_file):
-        with open(slot_durations_file, 'r') as file:
-            slot_durations = json.load(file)
-    else:
-        slot_durations = {}
-
-    slot_durations[str(date)] = duration
-
-    with open(slot_durations_file, 'w') as file:
-        json.dump(slot_durations, file)
-
-def load_slot_duration(date):
-    if os.path.exists(slot_durations_file):
-        with open(slot_durations_file, 'r') as file:
-            slot_durations = json.load(file)
-        return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
-    return DEFAULT_SLOT_DURATION
-
-def display_slots(free_slots):
-    st.write("Available time slots:")
-    selected_slot = None
-    for i, (start, end) in enumerate(free_slots):
-        slot_str = f"{start.strftime('%Y-%m-%d %H:%M')} - {end.strftime('%Y-%m-%d %H:%M')}"
-        if st.button(slot_str, key=f'slot_{i}'):
-            selected_slot = (start, end)
-    return selected_slot
-
 def read_user_email():
     with open('user_email.txt', 'r') as file:
         return file.read().strip()
 
+def delete_user_email_file():
+    if os.path.exists('user_email.txt'):
+        os.remove('user_email.txt')
+        st.write("Deleted user_email.txt")
+
+def commit_and_push_changes():
+    repo = git.Repo(search_parent_directories=True)
+    repo.git.add(update=True)
+    repo.index.commit("Deleted user_email.txt")
+    origin = repo.remote(name="origin")
+    origin.push()
+
 def main():
-    o=[]
-    c=0
+    o = []
+    c = 0
     user_email = read_user_email()
     if user_email:
         user_creds = authenticate(user_email)
-        k=0
+        k = 0
         if user_creds:
             st.success('Authenticated successfully.')
 
             # Organization selects a date and defines slot duration
-            selected_date = datetime.date.today()+datetime.timedelta(days=2)# Change this to adjust the number of days to chec
+            selected_date = datetime.date.today() + datetime.timedelta(days=2)
             while len(o) < 3:
-                    user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
-                    org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-                    free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
-                    if len(free_slots) > 0:
-                                for i in free_slots:
-                                        o.append(i)
-                                        if(len(o)==3):
-                                            break
-                    selected_date+=datetime.timedelta(days=1)
+                user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
+                org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
+                free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
+                if len(free_slots) > 0:
+                    for i in free_slots:
+                        o.append(i)
+                        if len(o) == 3:
+                            break
+                selected_date += datetime.timedelta(days=1)
             if len(o) > 0:
                 selected_slot = display_slots(o)
                 if selected_slot:
@@ -296,11 +261,15 @@ def main():
                             meeting_link = org_event.get('hangoutLink')
                             st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
                             st.write(f"Google Meet Link: {meeting_link}")
-                            send_email('Interview',start_time,end_time,meeting_link,user_email)
+                            send_email('Interview', start_time, end_time, meeting_link, user_email)
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
             else:
                 st.write("No free slots available for scheduling.")
+    
+    delete_user_email_file()  # Delete user_email.txt
+    commit_and_push_changes()  # Commit and push changes
+
 if __name__ == "__main__":
     if not os.path.exists(SERVICE_ACCOUNTS_DIR):
         os.makedirs(SERVICE_ACCOUNTS_DIR)
