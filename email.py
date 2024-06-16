@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -34,7 +35,7 @@ def send_email(event_summary, recipient_email):
 
 def main():
     user_email = st.text_input("Enter recipient's email address")
-    os['user_email']=user_email
+    os.environ['user_email']=user_email
     event_summary='https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
     if st.button('Send Email'):
         if user_email:
