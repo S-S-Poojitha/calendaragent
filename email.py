@@ -1,9 +1,9 @@
 import os
+import sqlite3
 import streamlit as st
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
-from git import Repo
 
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
@@ -34,25 +34,27 @@ def send_email(event_summary, recipient_email):
     except Exception as e:
         st.error(f"Failed to send email: {e}")
 
+def save_user_email(email):
+    # Connect to SQLite database or create it if it doesn't exist
+    conn = sqlite3.connect('user_emails.db')
+    c = conn.cursor()
+
+    # Create table if it doesn't exist
+    c.execute('''CREATE TABLE IF NOT EXISTS emails (email TEXT)''')
+
+    # Insert user's email into the table
+    c.execute("INSERT INTO emails (email) VALUES (?)", (email,))
+    conn.commit()
+
+    # Close the connection
+    conn.close()
+
 def main():
     user_email = st.text_input("Enter recipient's email address")
     if st.button('Send Email'):
         if user_email:
-            # Write user email to a text file
-            with open('user_email.txt', 'w') as file:
-                file.write(user_email)
-            
-            # Initialize Git repository object
-            repo = Repo(path=os.getcwd())
-
-            # Add all changes to the index
-            repo.index.add(['user_email.txt'])
-
-            # Commit the changes
-            repo.index.commit("Added user email to file")
-
-            # Push the changes to the remote repository
-            repo.remote(name='origin').push()
+            # Save user's email to SQLite database
+            save_user_email(user_email)
             
             # Send email
             event_summary = 'https://calendaragent-o72w6artpmcejn99oyzjl2.streamlit.app/'
