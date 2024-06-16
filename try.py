@@ -94,8 +94,8 @@ def main():
     o = []
     c = 0
     user_email = None
-    if st.button('Continue with Google'):
-        credentials = initiate_google_sign_in()
+    credentials = initiate_google_sign_in()
+    if(1):
         st.write(';')
         if credentials:
             user_email = credentials.id_token['email']
