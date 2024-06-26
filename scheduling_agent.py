@@ -261,6 +261,7 @@ def main():
     c=0
     if user_email:
         user_creds = authenticate(user_email)
+        creds=user_creds
         k=0
         if user_creds:
             st.success('Authenticated successfully.')
