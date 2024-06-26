@@ -32,10 +32,17 @@ def authenticate(user_email):
 
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+    else:
+        st.write(f"No token found for {user_email}. Please authorize access.")
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                st.error(f"Failed to refresh credentials: {e}")
+                logging.error(f"Failed to refresh credentials for {user_email}: {e}")
+                return None
         else:
             flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
             flow.redirect_uri = 'urn:ietf:wg:oauth:2.0:oob'
@@ -45,10 +52,15 @@ def authenticate(user_email):
 
             code = st.text_input('Enter the authorization code here:')
             if code:
-                flow.fetch_token(code=code)
-                creds = flow.credentials
-                with open(token_path, 'w') as token:
-                    token.write(creds.to_json())
+                try:
+                    flow.fetch_token(code=code)
+                    creds = flow.credentials
+                    with open(token_path, 'w') as token:
+                        token.write(creds.to_json())
+                except Exception as e:
+                    st.error(f"Failed to fetch token: {e}")
+                    logging.error(f"Failed to fetch token for {user_email}: {e}")
+                    return None
 
     return creds
 
