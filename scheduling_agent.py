@@ -72,62 +72,47 @@ def fetch_organization_calendar_events(credentials, calendar_id, selected_date):
         st.error(f"An error occurred: {error}")
         return []
 
-def calculate_free_slots(credentials, selected_date):
-    """Calculate free slots based on events."""
-    # Fetch events for the selected date
-    events = fetch_calendar_events(credentials, selected_date)
+def calculate_free_slots(user_events, org_events, selected_date, slot_duration, timezone_str='Asia/Kolkata'):
+    events = user_events + org_events
 
-    # Define working hours
-    working_hours_start = datetime.datetime.combine(selected_date, datetime.time(9, 0))
-    working_hours_end = datetime.datetime.combine(selected_date, datetime.time(17, 0))
+    tz = pytz.timezone(timezone_str)
+    working_hours_start = tz.localize(datetime.datetime.combine(selected_date, datetime.time(9, 0)))
+    working_hours_end = tz.localize(datetime.datetime.combine(selected_date, datetime.time(17, 0)))
+    current_system_time = datetime.datetime.now(tz)
 
-    # Initialize list to store occupied slots
+    if selected_date != current_system_time.date():
+        current_system_time = working_hours_start
+
     occupied_slots = []
-
-    # Convert event times to datetime objects and populate occupied slots list
     for event in events:
         start_time = event.get('start', {}).get('dateTime')
         end_time = event.get('end', {}).get('dateTime')
         if start_time and end_time:
-            event_start = datetime.datetime.strptime(start_time[:-6], '%Y-%m-%dT%H:%M:%S')
-            event_end = datetime.datetime.strptime(end_time[:-6], '%Y-%m-%dT%H:%M:%S')
-            occupied_slots.append((event_start, event_end))
+            try:
+                event_start = datetime.datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S%z')
+                event_end = datetime.datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S%z')
+                occupied_slots.append((event_start.astimezone(tz), event_end.astimezone(tz)))
+            except ValueError as e:
+                st.error(f"Error parsing event times: {e}")
 
-    # Sort occupied slots by start time
     occupied_slots.sort()
-
-    # Generate 1-hour time slots throughout the day
-    all_slots = []
-    current_time = working_hours_start
-    while current_time < working_hours_end:
-        next_time = current_time + datetime.timedelta(hours=1)
-        all_slots.append((current_time, next_time))
-        current_time = next_time
-
-    # Remove occupied slots from available slots
     free_slots = []
-    prev_event_end = working_hours_start
+    current_time = max(current_system_time, working_hours_start)
+
     for event_start, event_end in occupied_slots:
-        if event_start > prev_event_end:
-            free_slots.append((prev_event_end, event_start))
-        prev_event_end = event_end
+        if event_start > current_time:
+            free_slots.append((current_time, event_start))
+        current_time = max(current_time, event_end)
 
-    # Add final free slot if there's free time after the last event
-    if prev_event_end < working_hours_end:
-        free_slots.append((prev_event_end, working_hours_end))
+    if current_time < working_hours_end:
+        free_slots.append((current_time, working_hours_end))
 
-    # Filter free slots to ensure each slot is exactly 1 hour
     filtered_free_slots = []
     for start_time, end_time in free_slots:
-        if end_time - start_time == datetime.timedelta(hours=1):
-            filtered_free_slots.append((start_time, end_time))
-        elif end_time - start_time > datetime.timedelta(hours=1):
-            # Split longer slots into 1-hour slots
-            current_slot_start = start_time
-            while current_slot_start + datetime.timedelta(hours=1) <= end_time:
-                current_slot_end = current_slot_start + datetime.timedelta(hours=1)
-                filtered_free_slots.append((current_slot_start, current_slot_end))
-                current_slot_start = current_slot_end
+        while start_time + datetime.timedelta(minutes=slot_duration) <= end_time and start_time + datetime.timedelta(minutes=slot_duration) <= working_hours_end:
+            if start_time > datetime.datetime.now(tz):
+                filtered_free_slots.append((start_time, start_time + datetime.timedelta(minutes=slot_duration)))
+            start_time += datetime.timedelta(minutes=slot_duration)
 
     return filtered_free_slots
 
@@ -245,8 +230,7 @@ def load_slot_duration(date):
         return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
     return DEFAULT_SLOT_DURATION
 
-def display_free_slots(free_slots):
-    """Display free slots for user selection."""
+def display_slots(free_slots):
     st.write("Available time slots:")
     selected_slot = None
     for i, (start, end) in enumerate(free_slots):
@@ -261,17 +245,23 @@ def main():
     c=0
     if user_email:
         user_creds = authenticate(user_email)
-        creds=user_creds
         k=0
         if user_creds:
             st.success('Authenticated successfully.')
 
             # Organization selects a date and defines slot duration
-            #selected_date = datetime.date.today()+datetime.timedelta(days=2)
-            # Change this to adjust the number of days to chec
-            selected_date = st.date_input('Select a date', value=datetime.date.today()+datetime.timedelta(days=2))
-            o = calculate_free_slots(creds, selected_date)
-            if True:
+            selected_date = datetime.date.today()+datetime.timedelta(days=2)# Change this to adjust the number of days to chec
+            while len(o) < 3:
+                    user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
+                    org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
+                    free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
+                    if len(free_slots) > 0:
+                                for i in free_slots:
+                                        o.append(i)
+                                        if(len(o)==3):
+                                            break
+                    selected_date+=datetime.timedelta(days=1)
+            if len(o) > 0:
                 selected_slot = display_slots(o)
                 if selected_slot:
                     message_placeholder = st.empty()
