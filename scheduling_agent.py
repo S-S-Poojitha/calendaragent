@@ -18,12 +18,7 @@ warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
 ORG_CALENDAR_ID = 'poojithasarvamangala@gmail.com'
-DEFAULT_SLOT_DURATION = 60  # Default slot duration in minutes
-slot_durations_file = 'slot_durations.json'
-
-# Static password for the organization email (for demonstration purposes)
-ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
-st.title('Google Calendar Events Viewer & Scheduler')
+st.title('Google Calendar Events Scheduler')
 user_email = st.text_input("Enter your email address:")
 
 def authenticate(user_email):
