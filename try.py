@@ -262,7 +262,7 @@ def main():
             st.success('Authenticated successfully.')
 
             # Organization selects a date and defines slot duration
-            selected_date = st.date_input('Select a date', value=datetime.date.today()+datetime.timedelta(days=2))# Change this to adjust the number of days to chec
+            selected_date = st.date_input('Select a date', value=datetime.date.today()+datetime.timedelta(days=2),min_value=datetime.date.today()+datetime.timedelta(days=2))# Change this to adjust the number of days to chec
             user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
             org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
             free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
