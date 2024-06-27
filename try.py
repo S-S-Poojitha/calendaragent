@@ -12,14 +12,16 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
 import json
-import warnings
+import logging
 
-warnings.filterwarnings("ignore")
+logging.basicConfig(level=logging.ERROR)
+
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
 ORG_CALENDAR_ID = 'poojithasarvamangala@gmail.com'  # Replace with your organization's calendar ID
 DEFAULT_SLOT_DURATION = 60  # Default slot duration in minutes
 slot_durations_file = 'slot_durations.json'
+ORG_PASSWORD = 'org'  # Static password for organization email (for demonstration)
 
 st.title('Google Calendar Events Viewer & Scheduler')
 user_email = st.text_input("Enter your email address:")
@@ -184,7 +186,6 @@ def add_event_to_calendar(credentials, calendar_id, start_time, end_time, event_
         st.error(f"An error occurred: {error}")
         return None
 
-
 def send_email(event_summary, start_time, end_time, meeting_link, recipient_email, password=None):
     # Set up SMTP server
     smtp_server = 'smtp.gmail.com'
@@ -220,7 +221,6 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
     except Exception as e:
         st.error(f"Failed to send email: {e}")
 
-
 def save_slot_duration(date, duration):
     if os.path.exists(slot_durations_file):
         with open(slot_durations_file, 'r') as file:
@@ -249,21 +249,20 @@ def display_slots(free_slots):
             selected_slot = (start, end)
     return selected_slot
 
-
 def main():
     if user_email:
         user_creds = authenticate(user_email)
         if user_creds:
             st.success('Authenticated successfully.')
 
-            # Organization-specific behavior
             if user_email == ORG_CALENDAR_ID:
                 # Only show slot duration input for the organization
                 slot_duration = st.number_input('Enter slot duration in minutes:', value=DEFAULT_SLOT_DURATION, min_value=1)
-                selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
-                org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-                free_slots = calculate_free_slots([], org_events, selected_date, slot_duration)
-                display_slots(free_slots)
+                save_duration = st.button("Save Slot Duration")
+                if save_duration:
+                    selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
+                    save_slot_duration(selected_date, slot_duration)
+                    st.success(f"Slot duration saved for {selected_date}: {slot_duration} minutes.")
 
             else:
                 # Regular user behavior
@@ -301,7 +300,7 @@ def main():
                             st.error(f"An error occurred: {e}")
                 else:
                     st.write("No free slots available for scheduling.")
-        
+
 if __name__ == "__main__":
     if not os.path.exists(SERVICE_ACCOUNTS_DIR):
         os.makedirs(SERVICE_ACCOUNTS_DIR)
