@@ -12,6 +12,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
 import json
+import logging
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -23,6 +24,7 @@ slot_durations_file = 'slot_durations.json'
 
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
+
 st.title('Google Calendar Events Viewer & Scheduler')
 user_email = st.text_input("Enter your email address:")
 
@@ -258,11 +260,18 @@ def main():
         if user_creds:
             st.success('Authenticated successfully.')
 
+            # Check if the entered email is the organization email
+            if user_email == ORG_CALENDAR_ID:
+                org_password = st.text_input("Enter the organization password:", type="password")
+                if org_password != ORG_PASSWORD:
+                    st.error("Incorrect password. Please enter the correct password to proceed.")
+                    return
+
             # Organization selects a date and defines slot duration
             selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
             user_events = fetch_calendar_events(user_creds, 'primary', selected_date)
             org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-            free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
+            free_slots = calculate_free_slots(user_events, org_events, selected_date, DEFAULT_SLOT_DURATION)
 
             if st.button('Fetch Events'):
                 events = fetch_calendar_events(user_creds, 'primary', selected_date)
@@ -288,12 +297,12 @@ def main():
                             meeting_link = org_event.get('hangoutLink')
                             st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
                             st.write(f"Google Meet Link: {meeting_link}")
-                            send_email('Interview', start_time, end_time, meeting_link, user_email)
+                            send_email('Interview', start_time, end_time, meeting_link, user_email, ORG_PASSWORD if user_email == ORG_CALENDAR_ID else None)
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
             else:
                 st.write("No free slots available for scheduling.")
-        
+
 if __name__ == "__main__":
     if not os.path.exists(SERVICE_ACCOUNTS_DIR):
         os.makedirs(SERVICE_ACCOUNTS_DIR)
