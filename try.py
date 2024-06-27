@@ -221,4 +221,72 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
 
 def save_slot_duration(date, duration):
     if os.path.exists(slot_durations_file):
-        with open(slot_durations_file
+        with open(slot_durations_file, 'r') as file:
+            slot_durations = json.load(file)
+    else:
+        slot_durations = {}
+
+    slot_durations[str(date)] = duration
+
+    with open(slot_durations_file, 'w') as file:
+        json.dump(slot_durations, file)
+
+def load_slot_duration(date):
+    if os.path.exists(slot_durations_file):
+        with open(slot_durations_file, 'r') as file:
+            slot_durations = json.load(file)
+        return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
+    return DEFAULT_SLOT_DURATION
+
+def display_slots(free_slots):
+    st.write("Available time slots:")
+    selected_slot = None
+    for i, (start, end) in enumerate(free_slots):
+        slot_str = f"{start.strftime('%Y-%m-%d %H:%M')} - {end.strftime('%Y-%m-%d %H:%M')}"
+        st.write(f"{i+1}. {slot_str}")
+        if st.button(f"Select Slot {i+1}"):
+            selected_slot = (start, end)
+    return selected_slot
+
+def main():
+    creds = authenticate(user_email)
+    if creds:
+        st.success("Authentication successful!")
+        st.write(f"Authenticated as: {creds.service_account_email}")
+
+        selected_date = st.date_input('Select a date', value=datetime.date.today())
+
+        user_events = fetch_calendar_events(creds, 'primary', selected_date)
+        org_events = fetch_calendar_events(creds, ORG_CALENDAR_ID, selected_date)
+
+        if st.button('Fetch Events'):
+            user_events = fetch_calendar_events(creds, 'primary', selected_date)
+            org_events = fetch_calendar_events(creds, ORG_CALENDAR_ID, selected_date)
+
+        if user_events is not None and org_events is not None:
+            free_slots = calculate_free_slots(user_events, org_events, selected_date, load_slot_duration(selected_date))
+            selected_slot = display_slots(free_slots)
+
+            if selected_slot:
+                st.success(f"Selected slot: {selected_slot[0].strftime('%Y-%m-%d %H:%M')} - {selected_slot[1].strftime('%Y-%m-%d %H:%M')}")
+
+                event_summary = st.text_input('Enter event summary:')
+                hangout_link = st.text_input('Enter Google Meet link (optional):')
+
+                if st.button('Create Event'):
+                    event = add_event_to_calendar(creds, ORG_CALENDAR_ID, selected_slot[0], selected_slot[1], event_summary, hangout_link)
+                    if event:
+                        st.success(f"Event created: {event_summary}")
+
+                        if user_email:
+                            send_email(event_summary, selected_slot[0], selected_slot[1], hangout_link, user_email, ORG_PASSWORD)
+                            st.info(f"An email has been sent to {user_email} with event details.")
+                    else:
+                        st.error("Failed to create event.")
+            else:
+                st.warning("No slots available for selected date.")
+    else:
+        st.error("Authentication failed. Please check your credentials.")
+
+if __name__ == '__main__':
+    main()
