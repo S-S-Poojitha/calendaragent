@@ -13,6 +13,7 @@ from email.mime.text import MIMEText
 import smtplib
 import json
 import warnings
+from dateutil import parser
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
@@ -103,8 +104,8 @@ def calculate_free_slots(user_events, org_events, selected_date, slot_duration, 
         end_time = event.get('end', {}).get('dateTime')
         if start_time and end_time:
             try:
-                event_start = datetime.datetime.fromisoformat(start_time[:-1] + '+00:00')
-                event_end = datetime.datetime.fromisoformat(end_time[:-1] + '+00:00')
+                event_start = parser.isoparse(start_time)
+                event_end = parser.isoparse(end_time)
                 occupied_slots.append((event_start.astimezone(tz), event_end.astimezone(tz)))
             except ValueError as e:
                 st.error(f"Error parsing event times: {e}")
@@ -220,74 +221,4 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
 
 def save_slot_duration(date, duration):
     if os.path.exists(slot_durations_file):
-        with open(slot_durations_file, 'r') as file:
-            slot_durations = json.load(file)
-    else:
-        slot_durations = {}
-
-    slot_durations[str(date)] = duration
-
-    with open(slot_durations_file, 'w') as file:
-        json.dump(slot_durations, file)
-
-def load_slot_duration(date):
-    if os.path.exists(slot_durations_file):
-        with open(slot_durations_file, 'r') as file:
-            slot_durations = json.load(file)
-        return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
-    return DEFAULT_SLOT_DURATION
-
-def display_slots(free_slots):
-    st.write("Available time slots:")
-    selected_slot = None
-    for i, (start, end) in enumerate(free_slots):
-        slot_str = f"{start.strftime('%Y-%m-%d %H:%M')} - {end.strftime('%Y-%m-%d %H:%M')}"
-        if st.button(slot_str, key=f'slot_{i}'):
-            selected_slot = (start, end)
-    return selected_slot
-
-def main():
-    if user_email:
-        user_creds = authenticate(user_email)
-        if user_creds:
-            st.success('Authenticated successfully.')
-
-            selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))
-            user_events = fetch_calendar_events(user_creds, 'primary', selected_date)
-            org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-            free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
-
-            if st.button('Fetch Events'):
-                events = fetch_calendar_events(user_creds, 'primary', selected_date)
-                if events:
-                    st.write('Events for selected date:')
-                    for event in events:
-                        event_start_time = event.get('start', {}).get('dateTime')
-                        event_end_time = event.get('end', {}).get('dateTime')
-                        if event_start_time and event_end_time:
-                            start_time = datetime.datetime.fromisoformat(event_start_time[:-1] + '+00:00')
-                            end_time = datetime.datetime.fromisoformat(event_end_time[:-1] + '+00:00')
-                            st.write(f"- {event.get('summary', 'No summary available')} (Time: {start_time.time()} - {end_time.time()})")
-
-            if free_slots:
-                selected_slot = display_slots(free_slots)
-                if selected_slot:
-                    message_placeholder = st.empty()
-                    org_creds = authenticate(ORG_CALENDAR_ID)
-                    try:
-                        start_time, end_time = selected_slot
-                        org_event = add_event_to_calendar(org_creds, ORG_CALENDAR_ID, start_time, end_time, 'Interview')
-                        if org_event:
-                            meeting_link = org_event.get('hangoutLink')
-                            st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
-                            st.write(f"Google Meet Link: {meeting_link}")
-                            send_email('Interview', start_time, end_time, meeting_link, user_email)
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-            else:
-                st.write("No free slots available for scheduling.")
-        
-if __name__ == "__main__":
-    if not os.path.exists(SERVICE_ACCOUNTS_DIR):
-        os.makedirs(SERVICE_ACCOUNTS_DIR)
-    main()
+        with open(slot_durations_file
