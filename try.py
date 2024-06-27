@@ -259,7 +259,7 @@ def main():
             elif org_password:
                 st.error("Incorrect password. Please try again.")
 
-        slot_duration = load_slot_duration()
+        slot_duration = load_default_slot_duration()
         st.write(f"Current slot duration: {slot_duration} minutes")
 
         user_creds = authenticate(user_email)
