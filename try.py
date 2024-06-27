@@ -41,7 +41,6 @@ def authenticate(user_email):
                 creds.refresh(Request())
             except Exception as e:
                 st.error(f"Failed to refresh credentials: {e}")
-                logging.error(f"Failed to refresh credentials for {user_email}: {e}")
                 return None
         else:
             flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
@@ -59,7 +58,6 @@ def authenticate(user_email):
                         token.write(creds.to_json())
                 except Exception as e:
                     st.error(f"Failed to fetch token: {e}")
-                    logging.error(f"Failed to fetch token for {user_email}: {e}")
                     return None
 
     return creds
@@ -67,13 +65,13 @@ def authenticate(user_email):
 def fetch_calendar_events(credentials, calendar_id, selected_date):
     try:
         service = build('calendar', 'v3', credentials=credentials)
-        start_of_day = datetime.datetime.combine(selected_date, datetime.time.min)
-        end_of_day = datetime.datetime.combine(selected_date, datetime.time.max)
+        start_of_day = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
+        end_of_day = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
 
         events_result = service.events().list(
             calendarId=calendar_id,
-            timeMin=start_of_day.isoformat() + 'Z',
-            timeMax=end_of_day.isoformat() + 'Z',
+            timeMin=start_of_day,
+            timeMax=end_of_day,
             singleEvents=True,
             orderBy='startTime'
         ).execute()
@@ -85,6 +83,10 @@ def fetch_calendar_events(credentials, calendar_id, selected_date):
         return []
 
 def calculate_free_slots(user_events, org_events, selected_date, slot_duration, timezone_str='Asia/Kolkata'):
+    # Exclude weekends
+    if selected_date.weekday() in [5, 6]:  # 5: Saturday, 6: Sunday
+        return []
+
     events = user_events + org_events
 
     tz = pytz.timezone(timezone_str)
@@ -101,8 +103,8 @@ def calculate_free_slots(user_events, org_events, selected_date, slot_duration, 
         end_time = event.get('end', {}).get('dateTime')
         if start_time and end_time:
             try:
-                event_start = datetime.datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S%z')
-                event_end = datetime.datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S%z')
+                event_start = datetime.datetime.fromisoformat(start_time[:-1] + '+00:00')
+                event_end = datetime.datetime.fromisoformat(end_time[:-1] + '+00:00')
                 occupied_slots.append((event_start.astimezone(tz), event_end.astimezone(tz)))
             except ValueError as e:
                 st.error(f"Error parsing event times: {e}")
@@ -186,17 +188,13 @@ def add_event_to_calendar(credentials, calendar_id, start_time, end_time, event_
         st.error(f"An error occurred: {error}")
         return None
 
-
 def send_email(event_summary, start_time, end_time, meeting_link, recipient_email, password=None):
-    # Set up SMTP server
     smtp_server = 'smtp.gmail.com'
     smtp_port = 587  # For SSL: 465, For TLS: 587
 
-    # Sender and receiver email addresses
-    sender_email = 'poojithasarvamangala@gmail.com'  # Change this to your email address
+    sender_email = 'poojithasarvamangala@gmail.com'
     receiver_email = recipient_email
 
-    # Email content
     message = MIMEMultipart()
     message['From'] = sender_email
     message['To'] = receiver_email
@@ -206,22 +204,19 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
     if password:
         body += f"\nPassword for organization email confirmation: {password}"
 
-    # Add event invitation details
     event_invite = f"\n\nPlease respond with Yes/No/Maybe directly from Google Calendar"
     body += event_invite
 
     message.attach(MIMEText(body, 'plain'))
 
-    # Connect to SMTP server and send email
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()  # Enable TLS encryption
-            server.login(sender_email, 'ferm bqim epzj xdlc')  # Change this to your password
+            server.starttls()
+            server.login(sender_email, 'ferm bqim epzj xdlc')
             server.sendmail(sender_email, receiver_email, message.as_string())
         st.success('Email sent successfully!')
     except Exception as e:
         st.error(f"Failed to send email: {e}")
-
 
 def save_slot_duration(date, duration):
     if os.path.exists(slot_durations_file):
@@ -251,15 +246,13 @@ def display_slots(free_slots):
             selected_slot = (start, end)
     return selected_slot
 
-
 def main():
     if user_email:
         user_creds = authenticate(user_email)
         if user_creds:
             st.success('Authenticated successfully.')
 
-            # Organization selects a date and defines slot duration
-            selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
+            selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))
             user_events = fetch_calendar_events(user_creds, 'primary', selected_date)
             org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
             free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
@@ -272,8 +265,8 @@ def main():
                         event_start_time = event.get('start', {}).get('dateTime')
                         event_end_time = event.get('end', {}).get('dateTime')
                         if event_start_time and event_end_time:
-                            start_time = datetime.datetime.strptime(event_start_time[:-6], '%Y-%m-%dT%H:%M:%S')
-                            end_time = datetime.datetime.strptime(event_end_time[:-6], '%Y-%m-%dT%H:%M:%S')
+                            start_time = datetime.datetime.fromisoformat(event_start_time[:-1] + '+00:00')
+                            end_time = datetime.datetime.fromisoformat(event_end_time[:-1] + '+00:00')
                             st.write(f"- {event.get('summary', 'No summary available')} (Time: {start_time.time()} - {end_time.time()})")
 
             if free_slots:
