@@ -13,7 +13,6 @@ from email.mime.text import MIMEText
 import smtplib
 import json
 import warnings
-from dateutil import parser
 
 warnings.filterwarnings("ignore")
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
@@ -42,6 +41,7 @@ def authenticate(user_email):
                 creds.refresh(Request())
             except Exception as e:
                 st.error(f"Failed to refresh credentials: {e}")
+                logging.error(f"Failed to refresh credentials for {user_email}: {e}")
                 return None
         else:
             flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
@@ -59,6 +59,7 @@ def authenticate(user_email):
                         token.write(creds.to_json())
                 except Exception as e:
                     st.error(f"Failed to fetch token: {e}")
+                    logging.error(f"Failed to fetch token for {user_email}: {e}")
                     return None
 
     return creds
@@ -66,13 +67,13 @@ def authenticate(user_email):
 def fetch_calendar_events(credentials, calendar_id, selected_date):
     try:
         service = build('calendar', 'v3', credentials=credentials)
-        start_of_day = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
-        end_of_day = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
+        start_of_day = datetime.datetime.combine(selected_date, datetime.time.min)
+        end_of_day = datetime.datetime.combine(selected_date, datetime.time.max)
 
         events_result = service.events().list(
             calendarId=calendar_id,
-            timeMin=start_of_day,
-            timeMax=end_of_day,
+            timeMin=start_of_day.isoformat() + 'Z',
+            timeMax=end_of_day.isoformat() + 'Z',
             singleEvents=True,
             orderBy='startTime'
         ).execute()
@@ -84,10 +85,6 @@ def fetch_calendar_events(credentials, calendar_id, selected_date):
         return []
 
 def calculate_free_slots(user_events, org_events, selected_date, slot_duration, timezone_str='Asia/Kolkata'):
-    # Exclude weekends
-    if selected_date.weekday() in [5, 6]:  # 5: Saturday, 6: Sunday
-        return []
-
     events = user_events + org_events
 
     tz = pytz.timezone(timezone_str)
@@ -104,8 +101,8 @@ def calculate_free_slots(user_events, org_events, selected_date, slot_duration, 
         end_time = event.get('end', {}).get('dateTime')
         if start_time and end_time:
             try:
-                event_start = parser.isoparse(start_time)
-                event_end = parser.isoparse(end_time)
+                event_start = datetime.datetime.strptime(start_time, '%Y-%m-%dT%H:%M:%S%z')
+                event_end = datetime.datetime.strptime(end_time, '%Y-%m-%dT%H:%M:%S%z')
                 occupied_slots.append((event_start.astimezone(tz), event_end.astimezone(tz)))
             except ValueError as e:
                 st.error(f"Error parsing event times: {e}")
@@ -189,13 +186,17 @@ def add_event_to_calendar(credentials, calendar_id, start_time, end_time, event_
         st.error(f"An error occurred: {error}")
         return None
 
+
 def send_email(event_summary, start_time, end_time, meeting_link, recipient_email, password=None):
+    # Set up SMTP server
     smtp_server = 'smtp.gmail.com'
     smtp_port = 587  # For SSL: 465, For TLS: 587
 
-    sender_email = 'poojithasarvamangala@gmail.com'
+    # Sender and receiver email addresses
+    sender_email = 'poojithasarvamangala@gmail.com'  # Change this to your email address
     receiver_email = recipient_email
 
+    # Email content
     message = MIMEMultipart()
     message['From'] = sender_email
     message['To'] = receiver_email
@@ -205,19 +206,22 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
     if password:
         body += f"\nPassword for organization email confirmation: {password}"
 
+    # Add event invitation details
     event_invite = f"\n\nPlease respond with Yes/No/Maybe directly from Google Calendar"
     body += event_invite
 
     message.attach(MIMEText(body, 'plain'))
 
+    # Connect to SMTP server and send email
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(sender_email, 'ferm bqim epzj xdlc')
+            server.starttls()  # Enable TLS encryption
+            server.login(sender_email, 'ferm bqim epzj xdlc')  # Change this to your password
             server.sendmail(sender_email, receiver_email, message.as_string())
         st.success('Email sent successfully!')
     except Exception as e:
         st.error(f"Failed to send email: {e}")
+
 
 def save_slot_duration(date, duration):
     if os.path.exists(slot_durations_file):
@@ -243,50 +247,54 @@ def display_slots(free_slots):
     selected_slot = None
     for i, (start, end) in enumerate(free_slots):
         slot_str = f"{start.strftime('%Y-%m-%d %H:%M')} - {end.strftime('%Y-%m-%d %H:%M')}"
-        st.write(f"{i+1}. {slot_str}")
-        if st.button(f"Select Slot {i+1}"):
+        if st.button(slot_str, key=f'slot_{i}'):
             selected_slot = (start, end)
     return selected_slot
 
+
 def main():
-    creds = authenticate(user_email)
-    if creds:
-        st.success("Authentication successful!")
-        st.write(f"Authenticated as: {creds.service_account_email}")
+    if user_email:
+        user_creds = authenticate(user_email)
+        if user_creds:
+            st.success('Authenticated successfully.')
 
-        selected_date = st.date_input('Select a date', value=datetime.date.today())
+            # Organization selects a date and defines slot duration
+            selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
+            user_events = fetch_calendar_events(user_creds, 'primary', selected_date)
+            org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
+            free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
 
-        user_events = fetch_calendar_events(creds, 'primary', selected_date)
-        org_events = fetch_calendar_events(creds, ORG_CALENDAR_ID, selected_date)
+            if st.button('Fetch Events'):
+                events = fetch_calendar_events(user_creds, 'primary', selected_date)
+                if events:
+                    st.write('Events for selected date:')
+                    for event in events:
+                        event_start_time = event.get('start', {}).get('dateTime')
+                        event_end_time = event.get('end', {}).get('dateTime')
+                        if event_start_time and event_end_time:
+                            start_time = datetime.datetime.strptime(event_start_time[:-6], '%Y-%m-%dT%H:%M:%S')
+                            end_time = datetime.datetime.strptime(event_end_time[:-6], '%Y-%m-%dT%H:%M:%S')
+                            st.write(f"- {event.get('summary', 'No summary available')} (Time: {start_time.time()} - {end_time.time()})")
 
-        if st.button('Fetch Events'):
-            user_events = fetch_calendar_events(creds, 'primary', selected_date)
-            org_events = fetch_calendar_events(creds, ORG_CALENDAR_ID, selected_date)
-
-        if user_events is not None and org_events is not None:
-            free_slots = calculate_free_slots(user_events, org_events, selected_date, load_slot_duration(selected_date))
-            selected_slot = display_slots(free_slots)
-
-            if selected_slot:
-                st.success(f"Selected slot: {selected_slot[0].strftime('%Y-%m-%d %H:%M')} - {selected_slot[1].strftime('%Y-%m-%d %H:%M')}")
-
-                event_summary = st.text_input('Enter event summary:')
-                hangout_link = st.text_input('Enter Google Meet link (optional):')
-
-                if st.button('Create Event'):
-                    event = add_event_to_calendar(creds, ORG_CALENDAR_ID, selected_slot[0], selected_slot[1], event_summary, hangout_link)
-                    if event:
-                        st.success(f"Event created: {event_summary}")
-
-                        if user_email:
-                            send_email(event_summary, selected_slot[0], selected_slot[1], hangout_link, user_email, ORG_PASSWORD)
-                            st.info(f"An email has been sent to {user_email} with event details.")
-                    else:
-                        st.error("Failed to create event.")
+            if free_slots:
+                selected_slot = display_slots(free_slots)
+                if selected_slot:
+                    message_placeholder = st.empty()
+                    org_creds = authenticate(ORG_CALENDAR_ID)
+                    try:
+                        start_time, end_time = selected_slot
+                        org_event = add_event_to_calendar(org_creds, ORG_CALENDAR_ID, start_time, end_time, 'Interview')
+                        if org_event:
+                            meeting_link = org_event.get('hangoutLink')
+                            st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
+                            st.write(f"Google Meet Link: {meeting_link}")
+                            send_email('Interview', start_time, end_time, meeting_link, user_email)
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
             else:
-                st.warning("No slots available for selected date.")
-    else:
-        st.error("Authentication failed. Please check your credentials.")
-
-if __name__ == '__main__':
+                st.write("No free slots available for scheduling.")
+        
+if __name__ == "__main__":
+    if not os.path.exists(SERVICE_ACCOUNTS_DIR):
+        os.makedirs(SERVICE_ACCOUNTS_DIR)
     main()
