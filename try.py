@@ -23,6 +23,7 @@ slot_durations_file = 'slot_durations.json'
 
 # Static password for the organization email (for demonstration purposes)
 ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
+
 st.title('Google Calendar Events Viewer & Scheduler')
 user_email = st.text_input("Enter your email address:")
 
@@ -186,7 +187,6 @@ def add_event_to_calendar(credentials, calendar_id, start_time, end_time, event_
         st.error(f"An error occurred: {error}")
         return None
 
-
 def send_email(event_summary, start_time, end_time, meeting_link, recipient_email, password=None):
     # Set up SMTP server
     smtp_server = 'smtp.gmail.com'
@@ -222,7 +222,6 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
     except Exception as e:
         st.error(f"Failed to send email: {e}")
 
-
 def save_slot_duration(date, duration):
     if os.path.exists(slot_durations_file):
         with open(slot_durations_file, 'r') as file:
@@ -233,47 +232,63 @@ def save_slot_duration(date, duration):
     slot_durations[str(date)] = duration
 
     with open(slot_durations_file, 'w') as file:
-        json.dump(slot_durations, file, indent=4)
+        json.dump(slot_durations, file)
 
-    st.success(f'Slot duration updated to {duration} minutes for all users.')
+def load_slot_duration(date):
+    if os.path.exists(slot_durations_file):
+        with open(slot_durations_file, 'r') as file:
+            slot_durations = json.load(file)
+        return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
+    return DEFAULT_SLOT_DURATION
+
+def organizational_login():
+    org_password = st.text_input("Enter organization password:", type="password")
+    if org_password == ORG_PASSWORD:
+        st.success("Password correct! You can now change the slot duration.")
+        new_duration = st.number_input("Enter new slot duration (in minutes):", min_value=1, step=1)
+        if st.button("Save Slot Duration"):
+            save_slot_duration(datetime.date.today(), new_duration)
+            st.success(f"Slot duration updated to {new_duration} minutes.")
+            # Perform Git add, commit, and push here (placeholder for implementation)
+    elif org_password:
+        st.error("Incorrect password. Please try again.")
 
 def main():
-    global DEFAULT_SLOT_DURATION
+    if user_email.endswith('@organization.com'):
+        organizational_login()
 
-    if user_email and '@' in user_email:
-        st.write(f'Logged in as: {user_email}')
+    selected_date = st.date_input("Select a date:", datetime.date.today())
+    slot_duration = load_slot_duration(selected_date)
+    st.write(f"Current slot duration: {slot_duration} minutes")
 
-        if user_email == ORG_CALENDAR_ID:
-            password = st.text_input('Enter organization password:', type='password')
-            if password == ORG_PASSWORD:
-                st.write('Password accepted. You can now change the slot duration.')
-                new_duration = st.number_input('Enter new slot duration (in minutes):', min_value=1, value=DEFAULT_SLOT_DURATION)
-                if st.button('Save Slot Duration'):
-                    save_slot_duration(datetime.date.today(), new_duration)
-                    st.write('Slot duration saved successfully.')
+    if st.button("Fetch Calendar Events"):
+        creds = authenticate(user_email)
+        if creds:
+            user_events = fetch_calendar_events(creds, 'primary', selected_date)
+            org_events = fetch_calendar_events(creds, ORG_CALENDAR_ID, selected_date)
+            free_slots = calculate_free_slots(user_events, org_events, selected_date, slot_duration)
+            st.write("Free Slots:")
+            for idx, (start, end) in enumerate(free_slots, start=1):
+                st.write(f"Slot {idx}: {start.strftime('%H:%M')} - {end.strftime('%H:%M')}")
 
-                    # Perform git add, commit, and push operations here if needed
+    event_summary = st.text_input("Enter event summary:")
+    event_date = st.date_input("Select event date:")
+    start_time = st.time_input("Select start time:")
+    end_time = st.time_input("Select end time:")
+    hangout_link = st.text_input("Enter Google Meet link (optional):")
 
-            elif password:
-                st.warning('Incorrect password. Please try again.')
-        else:
-            st.write('Regular user interface...')
-            # Regular user interface logic goes here
+    if st.button("Add Event"):
+        start_datetime = datetime.datetime.combine(event_date, start_time)
+        end_datetime = datetime.datetime.combine(event_date, end_time)
+        creds = authenticate(user_email)
+        if creds:
+            event = add_event_to_calendar(creds, 'primary', start_datetime, end_datetime, event_summary, hangout_link)
+            if event:
+                st.success(f"Event '{event_summary}' added successfully!")
+                if hangout_link:
+                    send_email(event_summary, start_datetime, end_datetime, hangout_link, user_email, ORG_PASSWORD)
+                else:
+                    send_email(event_summary, start_datetime, end_datetime, '', user_email, ORG_PASSWORD)
 
-            # Example: Fetch user-specific events
-            credentials = authenticate(user_email)
-            if credentials:
-                selected_date = st.date_input('Select a date:', value=datetime.date.today())
-                user_events = fetch_calendar_events(credentials, 'primary', selected_date)
-                # Fetch organization events for slot calculation
-                org_credentials = authenticate(ORG_CALENDAR_ID)
-                if org_credentials:
-                    org_events = fetch_calendar_events(org_credentials, ORG_CALENDAR_ID, selected_date)
-                    free_slots = calculate_free_slots(user_events, org_events, selected_date, DEFAULT_SLOT_DURATION)
-                    st.write(f'Free slots on {selected_date}: {free_slots}')
-
-    else:
-        st.write('Please enter a valid email address.')
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
