@@ -267,6 +267,17 @@ def main():
             org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
             free_slots = calculate_free_slots(user_events, org_events, selected_date, 60)
             o=free_slots
+            if st.button('Fetch Events'):
+                events = fetch_calendar_events(user_creds, selected_date)
+                if events:
+                    st.write('Events for selected date:')
+                    for event in events:
+                        event_start_time = event.get('start', {}).get('dateTime')
+                        event_end_time = event.get('end', {}).get('dateTime')
+                        if event_start_time and event_end_time:
+                            start_time = datetime.datetime.strptime(event_start_time[:-6], '%Y-%m-%dT%H:%M:%S')
+                            end_time = datetime.datetime.strptime(event_end_time[:-6], '%Y-%m-%dT%H:%M:%S')
+                            st.write(f"- {event.get('summary', 'No summary available')} (Time: {start_time.time()} - {end_time.time()})")
             if len(o) > 0:
                 selected_slot = display_slots(o)
                 if selected_slot:
