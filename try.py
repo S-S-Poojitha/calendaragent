@@ -233,86 +233,47 @@ def save_slot_duration(date, duration):
     slot_durations[str(date)] = duration
 
     with open(slot_durations_file, 'w') as file:
-        json.dump(slot_durations, file)
+        json.dump(slot_durations, file, indent=4)
 
-    st.success(f"Slot duration saved for {date}: {duration} minutes.")
-
-def load_slot_duration(date):
-    if os.path.exists(slot_durations_file):
-        with open(slot_durations_file, 'r') as file:
-            slot_durations = json.load(file)
-        return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
-    return DEFAULT_SLOT_DURATION
-
-def display_slots(free_slots):
-    st.write("Available time slots:")
-    selected_slot = None
-    for i, (start, end) in enumerate(free_slots):
-        slot_str = f"{start.strftime('%Y-%m-%d %H:%M')} - {end.strftime('%Y-%m-%d %H:%M')}"
-        if st.button(slot_str, key=f'slot_{i}'):
-            selected_slot = (start, end)
-    return selected_slot
-
+    st.success(f'Slot duration updated to {duration} minutes for all users.')
 
 def main():
-    if user_email:
-        user_creds = authenticate(user_email)
-        if user_creds:
-            st.success('Authenticated successfully.')
+    global DEFAULT_SLOT_DURATION
 
-            # Organization login check
-            is_org_login = user_email == ORG_CALENDAR_ID
+    if user_email and '@' in user_email:
+        st.write(f'Logged in as: {user_email}')
 
-            # Organization selects a date and defines slot duration
-            selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
+        if user_email == ORG_CALENDAR_ID:
+            password = st.text_input('Enter organization password:', type='password')
+            if password == ORG_PASSWORD:
+                st.write('Password accepted. You can now change the slot duration.')
+                new_duration = st.number_input('Enter new slot duration (in minutes):', min_value=1, value=DEFAULT_SLOT_DURATION)
+                if st.button('Save Slot Duration'):
+                    save_slot_duration(datetime.date.today(), new_duration)
+                    st.write('Slot duration saved successfully.')
 
-            if not is_org_login:
-                slot_duration = st.number_input('Enter slot duration in minutes', min_value=1, value=load_slot_duration(selected_date))
-                save_slot_button = st.button('Save Slot Duration')
+                    # Perform git add, commit, and push operations here if needed
 
-            user_events = fetch_calendar_events(user_creds, 'primary', selected_date)
+            elif password:
+                st.warning('Incorrect password. Please try again.')
+        else:
+            st.write('Regular user interface...')
+            # Regular user interface logic goes here
 
-            if not is_org_login:
-                org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-                free_slots = calculate_free_slots(user_events, org_events, selected_date, slot_duration)
-            else:
-                free_slots = calculate_free_slots(user_events, [], selected_date, load_slot_duration(selected_date))
+            # Example: Fetch user-specific events
+            credentials = authenticate(user_email)
+            if credentials:
+                selected_date = st.date_input('Select a date:', value=datetime.date.today())
+                user_events = fetch_calendar_events(credentials, 'primary', selected_date)
+                # Fetch organization events for slot calculation
+                org_credentials = authenticate(ORG_CALENDAR_ID)
+                if org_credentials:
+                    org_events = fetch_calendar_events(org_credentials, ORG_CALENDAR_ID, selected_date)
+                    free_slots = calculate_free_slots(user_events, org_events, selected_date, DEFAULT_SLOT_DURATION)
+                    st.write(f'Free slots on {selected_date}: {free_slots}')
 
-            if st.button('Fetch Events'):
-                events = fetch_calendar_events(user_creds, 'primary', selected_date)
-                if events:
-                    st.write('Events for selected date:')
-                    for event in events:
-                        event_start_time = event.get('start', {}).get('dateTime')
-                        event_end_time = event.get('end', {}).get('dateTime')
-                        if event_start_time and event_end_time:
-                            start_time = datetime.datetime.strptime(event_start_time[:-6], '%Y-%m-%dT%H:%M:%S')
-                            end_time = datetime.datetime.strptime(event_end_time[:-6], '%Y-%m-%dT%H:%M:%S')
-                            st.write(f"- {event.get('summary', 'No summary available')} (Time: {start_time.time()} - {end_time.time()})")
+    else:
+        st.write('Please enter a valid email address.')
 
-            if not is_org_login and save_slot_button:
-                save_slot_duration(selected_date, slot_duration)
-
-            if free_slots:
-                selected_slot = display_slots(free_slots)
-                if selected_slot:
-                    message_placeholder = st.empty()
-                    if not is_org_login:
-                        org_creds = authenticate(ORG_CALENDAR_ID)
-                    try:
-                        start_time, end_time = selected_slot
-                        org_event = add_event_to_calendar(org_creds, ORG_CALENDAR_ID, start_time, end_time, 'Interview')
-                        if org_event:
-                            meeting_link = org_event.get('hangoutLink')
-                            st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
-                            st.write(f"Google Meet Link: {meeting_link}")
-                            send_email('Interview', start_time, end_time, meeting_link, user_email, ORG_PASSWORD)
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-            elif not is_org_login:
-                st.write("No free slots available for scheduling.")
-
-if __name__ == "__main__":
-    if not os.path.exists(SERVICE_ACCOUNTS_DIR):
-        os.makedirs(SERVICE_ACCOUNTS_DIR)
+if __name__ == '__main__':
     main()
