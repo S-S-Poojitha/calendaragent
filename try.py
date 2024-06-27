@@ -272,7 +272,7 @@ def main():
         if user_creds:
             st.success('Authenticated successfully.')
             selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
-            slot_duration = load_slot_duration()
+            slot_duration = load_default_slot_duration()
             st.write(f"Current slot duration: {slot_duration} minutes")
             user_events = fetch_calendar_events(user_creds, 'primary', selected_date)
             org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
