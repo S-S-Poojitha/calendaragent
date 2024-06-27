@@ -263,7 +263,7 @@ def main():
                 new_duration = st.number_input("Enter new slot duration (in minutes):", min_value=1, step=1)
                 if st.button("Save Slot Duration"):
                    # selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
-                    save_slot_duration(new_duration)
+                    save_default_slot_duration(new_duration)
                     st.success(f"Slot duration updated to {new_duration} minutes.")
             elif org_password:
                 st.error("Incorrect password. Please try again.")
