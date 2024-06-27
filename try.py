@@ -224,21 +224,17 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
         st.error(f"Failed to send email: {e}")
 
 
-def save_slot_duration(date, duration):
-    slot_durations = load_slot_durations()
-    slot_durations[str(date)] = duration
+def save_default_slot_duration(duration):
     with open(slot_durations_file, 'w') as file:
-        json.dump(slot_durations, file)
-
-def load_slot_duration(date):
-    slot_durations = load_slot_durations()
-    return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
-
-def load_slot_durations():
+        json.dump({"default_slot_duration": duration}, file)
+        
+def load_default_slot_duration():
     if os.path.exists(slot_durations_file):
         with open(slot_durations_file, 'r') as file:
-            return json.load(file)
-    return {}
+            slot_durations = json.load(file)
+        return slot_durations.get("default_slot_duration", DEFAULT_SLOT_DURATION)
+    return DEFAULT_SLOT_DURATION
+
 
 def display_slots(free_slots):
     st.write("Available time slots:")
@@ -258,12 +254,12 @@ def main():
                 st.success("Password correct! You can now change the slot duration.")
                 new_duration = st.number_input("Enter new slot duration (in minutes):", min_value=1, step=1)
                 if st.button("Save Slot Duration"):
-                    save_slot_duration(datetime.date.today(), new_duration)
+                    save_slot_duration(new_duration)
                     st.success(f"Slot duration updated to {new_duration} minutes.")
             elif org_password:
                 st.error("Incorrect password. Please try again.")
 
-        slot_duration = load_slot_duration(datetime.date.today())
+        slot_duration = load_slot_duration()
         st.write(f"Current slot duration: {slot_duration} minutes")
 
         user_creds = authenticate(user_email)
