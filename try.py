@@ -247,26 +247,24 @@ def display_slots(free_slots):
 
 
 def main():
-    if user_email:
-        if user_email.endswith('@organization.com'):
+    if user_email=='poojithasarvamangala@gmail.com':
             org_password = st.text_input("Enter organization password:", type="password")
             if org_password == ORG_PASSWORD:
                 st.success("Password correct! You can now change the slot duration.")
                 new_duration = st.number_input("Enter new slot duration (in minutes):", min_value=1, step=1)
                 if st.button("Save Slot Duration"):
+                   # selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
                     save_slot_duration(new_duration)
                     st.success(f"Slot duration updated to {new_duration} minutes.")
             elif org_password:
                 st.error("Incorrect password. Please try again.")
-
-        slot_duration = load_default_slot_duration()
-        st.write(f"Current slot duration: {slot_duration} minutes")
-
+    else:
         user_creds = authenticate(user_email)
         if user_creds:
             st.success('Authenticated successfully.')
-
-            selected_date = datetime.date.today() + datetime.timedelta(days=2)
+            selected_date = st.date_input('Select a date', value=datetime.date.today() + datetime.timedelta(days=2), min_value=datetime.date.today() + datetime.timedelta(days=2))  # Change this to adjust the number of days to check
+            slot_duration = load_slot_duration()
+            st.write(f"Current slot duration: {slot_duration} minutes")
             user_events = fetch_calendar_events(user_creds, 'primary', selected_date)
             org_events = fetch_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
             free_slots = calculate_free_slots(user_events, org_events, selected_date, slot_duration)
