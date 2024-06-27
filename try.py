@@ -225,8 +225,17 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
 
 
 def save_default_slot_duration(duration):
-    with open(slot_durations_file, 'w') as file:
-        json.dump({"default_slot_duration": duration}, file)
+    try:
+        with open(slot_durations_file, 'r+') as file:
+            data = json.load(file)  # Load existing data
+            data["default_slot_duration"] = duration  # Update the default slot duration
+            file.seek(0)  # Move the file pointer to the beginning
+            json.dump(data, file, indent=4)  # Write the updated data back to the file
+            file.truncate()  # Remove any remaining content (in case the new content is shorter)
+        st.success(f"Default slot duration updated to {duration} minutes.")
+    except Exception as e:
+        st.error(f"Failed to save default slot duration: {e}")
+
         
 def load_default_slot_duration():
     if os.path.exists(slot_durations_file):
