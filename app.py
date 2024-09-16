@@ -14,7 +14,7 @@ import smtplib
 
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
-ORG_CALENDAR_ID = 'poojithasarvamangala@gmail.com'
+ORG_CALENDAR_ID = 'REPLACE_WITH_COMPANY_MAIL'
 
 def authenticate(user_email):
     creds = None
@@ -169,7 +169,7 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
     smtp_port = 587  # For SSL: 465, For TLS: 587
 
     # Sender and receiver email addresses
-    sender_email = 'poojithasarvamangala@gmail.com'  # Change this to your email address
+    sender_email = 'REPLACE_WITH_COMPANY_MAIL'  # Change this to your email address
     receiver_email = recipient_email
 
     # Email content
@@ -185,7 +185,7 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()  # Enable TLS encryption
-            server.login(sender_email, 'ferm bqim epzj xdlc')  # Change this to your password
+            server.login(sender_email, 'REPLACE_YOUR_PASSWORD')  # Change this to your password
             server.sendmail(sender_email, receiver_email, message.as_string())
         st.success('Email sent successfully!')
     except Exception as e:
