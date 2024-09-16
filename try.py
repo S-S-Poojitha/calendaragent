@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import pytz
 import csv
-
+#handles deletions
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
 
@@ -72,5 +72,5 @@ def check_and_delete_events(mail, calendar_id):
                         writer.writerow({'Event ID': event_id, 'Attendee Email': attendee.get('email')})
 # Example usage
 if __name__ == "__main__":
-    calendar_id = 'poojithasarvamangala@gmail.com'  # Replace with your calendar ID
+    calendar_id = 'REPLACE_WITH_YOUR_MAIL_ID'  # Replace with your calendar ID
     check_and_delete_events(calendar_id, calendar_id)
