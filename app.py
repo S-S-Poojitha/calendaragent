@@ -11,10 +11,16 @@ import pytz
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+import json
 
 SERVICE_ACCOUNTS_DIR = 'service_accounts'
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/calendar.readonly"]
-ORG_CALENDAR_ID = 'REPLACE_WITH_COMPANY_MAIL'
+ORG_CALENDAR_ID = 'poojithasarvamangala@gmail.com'
+DEFAULT_SLOT_DURATION = 60  # Default slot duration in minutes
+slot_durations_file = 'slot_durations.json'
+
+# Static password for the organization email (for demonstration purposes)
+ORG_PASSWORD = 'org'  # This should be securely stored and managed in practice
 
 def authenticate(user_email):
     creds = None
@@ -62,7 +68,7 @@ def fetch_organization_calendar_events(credentials, calendar_id, selected_date):
         st.error(f"An error occurred: {error}")
         return []
 
-def calculate_free_slots(user_events, org_events, selected_date, timezone_str='Asia/Kolkata'):
+def calculate_free_slots(user_events, org_events, selected_date, slot_duration, timezone_str='Asia/Kolkata'):
     events = user_events + org_events
 
     tz = pytz.timezone(timezone_str)
@@ -99,10 +105,10 @@ def calculate_free_slots(user_events, org_events, selected_date, timezone_str='A
 
     filtered_free_slots = []
     for start_time, end_time in free_slots:
-        while start_time + datetime.timedelta(hours=1) <= end_time and start_time + datetime.timedelta(hours=1) <= working_hours_end :
+        while start_time + datetime.timedelta(minutes=slot_duration) <= end_time and start_time + datetime.timedelta(minutes=slot_duration) <= working_hours_end:
             if start_time > datetime.datetime.now(tz):
-                filtered_free_slots.append((start_time, start_time + datetime.timedelta(hours=1)))
-            start_time += datetime.timedelta(hours=1)
+                filtered_free_slots.append((start_time, start_time + datetime.timedelta(minutes=slot_duration)))
+            start_time += datetime.timedelta(minutes=slot_duration)
 
     return filtered_free_slots
 
@@ -162,14 +168,13 @@ def add_event_to_calendar(credentials, calendar_id, start_time, end_time, event_
         st.error(f"An error occurred: {error}")
         return None
 
-# Function to send email
-def send_email(event_summary, start_time, end_time, meeting_link, recipient_email):
+def send_email(event_summary, start_time, end_time, meeting_link, recipient_email, password=None):
     # Set up SMTP server
     smtp_server = 'smtp.gmail.com'
     smtp_port = 587  # For SSL: 465, For TLS: 587
 
     # Sender and receiver email addresses
-    sender_email = 'REPLACE_WITH_COMPANY_MAIL'  # Change this to your email address
+    sender_email = 'poojithasarvamangala@gmail.com'  # Change this to your email address
     receiver_email = recipient_email
 
     # Email content
@@ -179,17 +184,40 @@ def send_email(event_summary, start_time, end_time, meeting_link, recipient_emai
     message['Subject'] = 'Event Details'
 
     body = f"Event: {event_summary}\nTime: {start_time} - {end_time}\nGoogle Meet Link: {meeting_link}"
+    if password:
+        body += f"\nPassword for organization email confirmation: {password}"
     message.attach(MIMEText(body, 'plain'))
 
     # Connect to SMTP server and send email
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()  # Enable TLS encryption
-            server.login(sender_email, 'REPLACE_YOUR_PASSWORD')  # Change this to your password
+            server.login(sender_email,'ferm bqim epzj xdlc')  # Change this to your password
             server.sendmail(sender_email, receiver_email, message.as_string())
         st.success('Email sent successfully!')
     except Exception as e:
         st.error(f"Failed to send email: {e}")
+
+
+
+def save_slot_duration(date, duration):
+    if os.path.exists(slot_durations_file):
+        with open(slot_durations_file, 'r') as file:
+            slot_durations = json.load(file)
+    else:
+        slot_durations = {}
+
+    slot_durations[str(date)] = duration
+
+    with open(slot_durations_file, 'w') as file:
+        json.dump(slot_durations, file)
+
+def load_slot_duration(date):
+    if os.path.exists(slot_durations_file):
+        with open(slot_durations_file, 'r') as file:
+            slot_durations = json.load(file)
+        return slot_durations.get(str(date), DEFAULT_SLOT_DURATION)
+    return DEFAULT_SLOT_DURATION
 
 def main():
     st.title('Google Calendar Events Viewer & Scheduler')
@@ -199,8 +227,24 @@ def main():
 
         if user_creds:
             st.success('Authenticated successfully.')
-            selected_date = st.date_input('Select a date', value=datetime.date.today(), min_value=datetime.date.today())
 
+            # Organization selects a date and defines slot duration
+            if user_email == ORG_CALENDAR_ID:
+                # Check if the provided password matches the default password "org"
+                if st.text_input('Enter the organization email password:', type='password') == ORG_PASSWORD:
+                    selected_date = st.date_input('Select a date to define slot duration', value=datetime.date.today(), min_value=datetime.date.today())
+                    slot_duration = st.number_input('Enter the duration of each timeslot in minutes:', min_value=15, step=15, value=DEFAULT_SLOT_DURATION)
+                    if st.button('Save Slot Duration'):
+                        save_slot_duration(selected_date, slot_duration)
+                        st.success(f"Slot duration of {slot_duration} minutes saved for {selected_date}")
+                else:
+                    st.error('Incorrect organization email password. Please try again.')
+
+            else:
+                selected_date = st.date_input('Select a date', value=datetime.date.today(), min_value=datetime.date.today())
+
+            # Load the slot duration for the selected date
+            slot_duration = load_slot_duration(selected_date)
             user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
             org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
 
@@ -220,7 +264,7 @@ def main():
 
             user_events = fetch_organization_calendar_events(user_creds, 'primary', selected_date)
             org_events = fetch_organization_calendar_events(user_creds, ORG_CALENDAR_ID, selected_date)
-            free_slots = calculate_free_slots(user_events, org_events, selected_date)
+            free_slots = calculate_free_slots(user_events, org_events, selected_date,slot_duration)
             event_summary = st.text_input("Enter event summary:")
             e = event_summary
             selected_slot = display_free_slots(free_slots)
@@ -228,25 +272,26 @@ def main():
             if selected_slot is not None:
                 start_time, end_time = selected_slot
                 st.write(selected_slot)
-                #add_event_button = st.button('Add Event')
+                add_event_button = st.button('Add Event')
 
                 message_placeholder = st.empty()
                 message_placeholder.write("Proceeding to create event...")
 
                 org_creds = authenticate('poojithasarvamangala@gmail.com')
                 org_event = add_event_to_calendar(org_creds, ORG_CALENDAR_ID, start_time, end_time, e)
-
                 if org_event:
                     meeting_link = org_event.get('hangoutLink')
-                    st.success(f"Event created in organization's calendar. Google Meet Link: {meeting_link}")
-                    st.write(f"Google Meet Link: {meeting_link}")
+                    st.success(f"Event created in organization's calendar.")
 
-                    # Create event in user's calendar with the same Google Meet link
-                    user_event = add_event_to_calendar(user_creds, 'primary', start_time, end_time, e, hangout_link=meeting_link)
+                    if user_email!=ORG_CALENDAR_ID:
+                        user_event = add_event_to_calendar(user_creds, 'primary', start_time, end_time, e, hangout_link=meeting_link)
 
                     # Send email with event details
-                    recipient_email = user_email  # You can change this to any email address
-                    send_email(e, start_time, end_time, meeting_link, recipient_email)
+                        recipient_email = user_email  # You can change this to any email address
+                        send_email(e, start_time, end_time, meeting_link, recipient_email)
+                    else:
+                        user_event = add_event_to_calendar(user_creds, 'primary', start_time, end_time, e, hangout_link=None)
+
                 else:
                     st.warning('Failed to create event in organization\'s calendar. Please try again.')
 
